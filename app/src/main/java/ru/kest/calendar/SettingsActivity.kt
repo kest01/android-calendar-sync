@@ -8,10 +8,11 @@ import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
+import ru.kest.calendar.service.SyncService
+
+const val SYNC_KEY = "sync"
 
 class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
-
-    private val SYNC_KEY = "sync"
 
     private val TAG = this::class.simpleName
 
@@ -37,6 +38,11 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         val newSyncState = sharedPreferences?.getBoolean(SYNC_KEY, false) ?: false
         if (!initialSyncState && newSyncState) {
             Log.w(TAG, "NEED TO START SYNC")
+            val syncService = SyncService(applicationContext, contentResolver)
+            val accounts = syncService.getCalendarAccounts()
+            accounts
+                .find { it.accountName.toLowerCase() == "kkharitonov@luxoft.com"}
+                ?.let { syncService.getEventsForAccount(it) }
         }
         initialSyncState = newSyncState
     }
