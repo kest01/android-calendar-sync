@@ -1,14 +1,15 @@
 package ru.kest.calendar
 
-import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
-import android.view.MenuItem
+import android.widget.Toast
+import android.widget.Toast.LENGTH_SHORT
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import ru.kest.calendar.service.SyncService
+import ru.kest.calendar.service.CalendarService
+import java.util.*
 
 const val SYNC_KEY = "sync"
 
@@ -38,17 +39,33 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         val newSyncState = sharedPreferences?.getBoolean(SYNC_KEY, false) ?: false
         if (!initialSyncState && newSyncState) {
             Log.w(TAG, "NEED TO START SYNC")
-            val syncService = SyncService(applicationContext, contentResolver)
-            val accounts = syncService.getCalendarAccounts()
-            accounts
-                .find { it.accountName.toLowerCase() == "kkharitonov@luxoft.com"}
-                ?.let { syncService.getEventsForAccount(it) }
+            syncCalendars()
         }
         initialSyncState = newSyncState
     }
 
-    class SettingsFragment : PreferenceFragmentCompat() {
+    private fun syncCalendars() {
+        val calendarService = CalendarService(applicationContext, contentResolver)
+        val accounts = calendarService.getCalendarAccounts()
+        val sourceAccount = accounts
+            .find { it.ownerName.toLowerCase(Locale.ENGLISH) == "kkharitonov@luxoft.com" }
+        val targetAccount = accounts
+            .find { it.ownerName.toLowerCase(Locale.ENGLISH) == "konstantin.kharitonov@gmail.com" }
+        if (sourceAccount == null || targetAccount == null) {
+            Toast.makeText(applicationContext, "Source or target account not found", LENGTH_SHORT)
+                .show()
+        } else {
+            val sourceEvents = calendarService.getEventsForAccount(sourceAccount, 3)
+            val targetEvents = calendarService.getEventsForAccount(targetAccount, 3)
+            sourceEvents.forEach {
+                if (!calendarService.isCalendarContainsEvent(targetEvents, it)) {
+                    calendarService.addEvent(it, targetAccount)
+                }
+            }
+        }
+    }
 
+    class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
         }
