@@ -2,7 +2,6 @@ package ru.kest.calendar.service
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -35,8 +34,7 @@ data class CalendarEvent(val organizer: String,
                          val start: Long,
                          val end: Long)
 
-class CalendarService(private val context: Context,
-                      private val contentResolver: ContentResolver) {
+class CalendarService(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun getCalendarAccounts(): List<CalendarAccount> {
@@ -51,7 +49,7 @@ class CalendarService(private val context: Context,
             Calendars.OWNER_ACCOUNT,  // 3
             Calendars.SYNC_EVENTS // 3
         )
-        val cur = contentResolver.query( Calendars.CONTENT_URI, EVENT_PROJECTION, null, null, null)
+        val cur = context.contentResolver.query( Calendars.CONTENT_URI, EVENT_PROJECTION, null, null, null)
 
         if (cur != null) {
             while (cur.moveToNext()) {
@@ -61,12 +59,11 @@ class CalendarService(private val context: Context,
                     cur.getString(2),
                     cur.getString(3)
                 )
-                Log.i(TAG,"Account: $account; synced: ${cur.getInt(4)}")
+                Log.d(TAG,"Account: $account; synced: ${cur.getInt(4)}")
                 result.add(account)
             }
             cur.close()
         }
-        Toast.makeText(context, "Sync compete", LENGTH_SHORT).show()
         return result
     }
 
@@ -89,7 +86,7 @@ class CalendarService(private val context: Context,
         ContentUris.appendId(builder, getTimeAtStartOfDayMillis())
         ContentUris.appendId(builder, getTimeAtStartOfDayMillis(daysFromToday.toLong()))
 
-        val cur = contentResolver.query(
+        val cur = context.contentResolver.query(
             builder.build(),
             EVENT_PROJECTION,
             "(${CalendarContract.Instances.CALENDAR_ID} = ?)",
@@ -108,12 +105,11 @@ class CalendarService(private val context: Context,
                     cur.getLong(5) ?: 0,
                     cur.getLong(6) ?: 0
                 )
-                Log.i(TAG,"Event: $event")
+                Log.d(TAG,"Event: $event")
                 result.add(event)
             }
             cur.close()
         }
-        Log.i(TAG,"getEventsForAccount(): $account")
         return result
     }
 
@@ -132,8 +128,8 @@ class CalendarService(private val context: Context,
             put(CalendarContract.Events.CALENDAR_ID, targetAccount.id)
             put(CalendarContract.Events.EVENT_TIMEZONE, event.timeZone)
         }
-        val uri: Uri? = contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventFields)
-        Log.i(TAG, "Created event $event; result: $uri")
+        val uri: Uri? = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventFields)
+        Log.d(TAG, "Created event $event; result: $uri")
         if (uri != null) {
             val eventId: Long? = uri.lastPathSegment?.toLong()
             if (eventId != null) {
@@ -142,7 +138,7 @@ class CalendarService(private val context: Context,
                     put(CalendarContract.Reminders.EVENT_ID, eventId)
                     put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
                 }
-                contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, reminderFields)
+                context.contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, reminderFields)
             }
         }
     }

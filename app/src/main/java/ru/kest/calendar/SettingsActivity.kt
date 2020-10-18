@@ -3,19 +3,22 @@ package ru.kest.calendar
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
-import android.widget.Toast.LENGTH_SHORT
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import ru.kest.calendar.service.CalendarService
-import java.util.*
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkRequest
+import ru.kest.calendar.service.CalendarSyncWorker
+import java.util.concurrent.TimeUnit
 
 const val SYNC_KEY = "sync"
 
 class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val TAG = this::class.simpleName
+    private val WORKER_TAG = "CalendarSyncWorker"
 
     private var initialSyncState = false
 
@@ -31,37 +34,46 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         Log.i(TAG, "Initial preferences: ${logPrefs(prefs)}")
         initialSyncState = prefs.getBoolean(SYNC_KEY, false)
+        syncCalendars(initialSyncState)
         prefs.registerOnSharedPreferenceChangeListener(this)
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         Log.i(TAG, "onSharedPreferenceChanged(): key: $key; ${logPrefs(sharedPreferences)}")
         val newSyncState = sharedPreferences?.getBoolean(SYNC_KEY, false) ?: false
-        if (!initialSyncState && newSyncState) {
-            Log.w(TAG, "NEED TO START SYNC")
-            syncCalendars()
+        if (initialSyncState != newSyncState) {
+            syncCalendars(newSyncState)
         }
         initialSyncState = newSyncState
     }
 
-    private fun syncCalendars() {
-        val calendarService = CalendarService(applicationContext, contentResolver)
-        val accounts = calendarService.getCalendarAccounts()
-        val sourceAccount = accounts
-            .find { it.ownerName.toLowerCase(Locale.ENGLISH) == "kkharitonov@luxoft.com" }
-        val targetAccount = accounts
-            .find { it.ownerName.toLowerCase(Locale.ENGLISH) == "konstantin.kharitonov@gmail.com" }
-        if (sourceAccount == null || targetAccount == null) {
-            Toast.makeText(applicationContext, "Source or target account not found", LENGTH_SHORT)
-                .show()
+    private fun syncCalendars(enable: Boolean) {
+        WorkManager
+            .getInstance(applicationContext)
+            .cancelAllWorkByTag(WORKER_TAG)
+
+        if (enable) {
+
+            val immediateSyncWorkerRequest: WorkRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
+                .addTag(WORKER_TAG)
+                .build()
+            WorkManager
+                .getInstance(applicationContext)
+                .enqueue(immediateSyncWorkerRequest)
+
+            val periodicSyncWorkRequest: WorkRequest = PeriodicWorkRequestBuilder<CalendarSyncWorker>(
+                30, TimeUnit.MINUTES,
+                15, TimeUnit.MINUTES
+            )
+                .addTag(WORKER_TAG)
+                .build()
+
+            WorkManager
+                .getInstance(applicationContext)
+                .enqueue(periodicSyncWorkRequest)
+            Log.i(TAG,"$WORKER_TAG is started")
         } else {
-            val sourceEvents = calendarService.getEventsForAccount(sourceAccount, 3)
-            val targetEvents = calendarService.getEventsForAccount(targetAccount, 3)
-            sourceEvents.forEach {
-                if (!calendarService.isCalendarContainsEvent(targetEvents, it)) {
-                    calendarService.addEvent(it, targetAccount)
-                }
-            }
+            Log.i(TAG,"$WORKER_TAG is canceled")
         }
     }
 
