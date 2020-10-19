@@ -6,10 +6,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkRequest
+import androidx.work.*
 import ru.kest.calendar.service.CalendarSyncWorker
 import java.util.concurrent.TimeUnit
 
@@ -53,15 +50,7 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
             .cancelAllWorkByTag(WORKER_TAG)
 
         if (enable) {
-
-            val immediateSyncWorkerRequest: WorkRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
-                .addTag(WORKER_TAG)
-                .build()
-            WorkManager
-                .getInstance(applicationContext)
-                .enqueue(immediateSyncWorkerRequest)
-
-            val periodicSyncWorkRequest: WorkRequest = PeriodicWorkRequestBuilder<CalendarSyncWorker>(
+            val periodicSyncWorkRequest: PeriodicWorkRequest = PeriodicWorkRequestBuilder<CalendarSyncWorker>(
                 30, TimeUnit.MINUTES,
                 15, TimeUnit.MINUTES
             )
@@ -70,7 +59,7 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
 
             WorkManager
                 .getInstance(applicationContext)
-                .enqueue(periodicSyncWorkRequest)
+                .enqueueUniquePeriodicWork(WORKER_TAG, ExistingPeriodicWorkPolicy.REPLACE, periodicSyncWorkRequest)
             Log.i(TAG,"$WORKER_TAG is started")
         } else {
             Log.i(TAG,"$WORKER_TAG is canceled")
